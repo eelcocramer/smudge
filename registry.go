@@ -182,7 +182,7 @@ func RemoveNode(node *Node) (*Node, error) {
 // the list of recently updated nodes. If the status is StatusDead, then the
 // node will be moved from the live nodes list to the dead nodes list.
 func UpdateNodeStatus(node *Node, status NodeStatus, statusSource *Node) {
-	updateNodeStatus(node, status, node.heartbeat, statusSource)
+	updateNodeStatus(node, status, node.heartbeat(), statusSource)
 }
 
 /******************************************************************************
@@ -282,9 +282,9 @@ func parseNodeAddress(hostAndMaybePort string) (net.IP, uint16, error) {
 func updateNodeStatus(node *Node, status NodeStatus, heartbeat uint32, statusSource *Node) {
 	if node.status != status {
 		node.Lock()
-		if heartbeat < node.heartbeat {
+		if heartbeat < node.heartbeat() {
 			logfWarn("Decreasing known node heartbeat value from %d to %d",
-				node.heartbeat,
+				node.heartbeat(),
 				heartbeat)
 		}
 
@@ -292,7 +292,7 @@ func updateNodeStatus(node *Node, status NodeStatus, heartbeat uint32, statusSou
 		node.status = status
 		node.statusSource = statusSource
 		node.emitCounter = int8(emitCount())
-		node.heartbeat = heartbeat
+		node._heartbeat = heartbeat
 		node.Unlock()
 
 		// If this isn't in the recently updated list, add it.

@@ -685,7 +685,7 @@ func transmitVerbGenericUDP(node *Node, forwardTo *Node, verb messageVerb, code 
 	}
 
 	for _, n := range nodes {
-		err = msg.addMember(n, n.status, n.heartbeat, n.statusSource)
+		err = msg.addMember(n, n.status, n.heartbeat(), n.statusSource)
 		if err != nil {
 			return err
 		}
@@ -759,9 +759,9 @@ func updateStatusesFromMessage(msg message) {
 		// If the heartbeat in the message is less then the heartbeat
 		// associated with the last known status, then we conclude that the
 		// message is old and we drop it.
-		if m.heartbeat < m.node.heartbeat {
+		if m.heartbeat < m.node.heartbeat() {
 			logfDebug("Message is old (%d vs %d): dropping",
-				m.node.heartbeat, m.heartbeat)
+				m.node.heartbeat(), m.heartbeat)
 
 			continue
 		}
@@ -783,7 +783,7 @@ func updateStatusesFromMessage(msg message) {
 	}
 
 	// Obviously, we know the sender is alive. Report it as such.
-	if msg.senderHeartbeat > msg.sender.heartbeat {
+	if msg.senderHeartbeat > msg.sender.heartbeat() {
 		updateNodeStatus(msg.sender, StatusAlive, msg.senderHeartbeat, thisHost)
 	}
 

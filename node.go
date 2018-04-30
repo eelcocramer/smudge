@@ -43,7 +43,7 @@ type Node struct {
 	pingMillis   int
 	status       NodeStatus
 	emitCounter  int8
-	heartbeat    uint32
+	_heartbeat   uint32
 	statusSource *Node
 }
 
@@ -123,6 +123,13 @@ func (n *Node) Timestamp() uint32 {
 // Touch updates the timestamp to the local time in milliseconds.
 func (n *Node) Touch() {
 	n.timestamp = GetNowInMillis()
+}
+
+// Gets the current heartbeats
+func (n *Node) heartbeat() uint32 {
+	n.RLock()
+	defer n.RUnlock()
+	return n._heartbeat
 }
 
 func nodeAddressString(ip net.IP, port uint16) string {
