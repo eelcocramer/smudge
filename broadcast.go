@@ -46,11 +46,11 @@ var broadcasts = struct {
 // the status update infrastructure. Although useful, its payload is limited
 // to only 256 bytes.
 type Broadcast struct {
-	bytes       []byte
-	origin      *Node
-	index       uint32
-	label       string
-	emitCounter int8
+	bytes        []byte
+	origin       *Node
+	index        uint32
+	label        string
+	_emitCounter int8
 }
 
 // Bytes returns a copy of this broadcast's bytes. Manipulating the contents
@@ -104,10 +104,10 @@ func BroadcastBytes(bytes []byte) error {
 	broadcasts.Lock()
 
 	bcast := Broadcast{
-		origin:      thisHost,
-		index:       indexCounter,
-		bytes:       bytes,
-		emitCounter: int8(emitCount())}
+		origin:       thisHost,
+		index:        indexCounter,
+		bytes:        bytes,
+		_emitCounter: int8(emitCount())}
 
 	broadcasts.m[bcast.Label()] = &bcast
 
@@ -125,6 +125,20 @@ func BroadcastBytes(bytes []byte) error {
 // length is 256 bytes.
 func BroadcastString(str string) error {
 	return BroadcastBytes([]byte(str))
+}
+
+// Return the emit counter
+func (b *Broadcast) emitCounter() int8 {
+	broadcasts.RLock()
+	defer broadcasts.RUnlock()
+	return b._emitCounter
+}
+
+// Decreases emit counter
+func (b *Broadcast) decEmitCounter() {
+	broadcasts.Lock()
+	defer broadcasts.Unlock()
+	b._emitCounter--
 }
 
 // Message contents for IPv6
@@ -220,10 +234,10 @@ func decodeBroadcast(bytes []byte) (*Broadcast, error) {
 	}
 
 	bcast := Broadcast{
-		origin:      origin,
-		index:       index,
-		bytes:       bytes[p : p+int(length)],
-		emitCounter: int8(emitCount())}
+		origin:       origin,
+		index:        index,
+		bytes:        bytes[p : p+int(length)],
+		_emitCounter: int8(emitCount())}
 
 	err := checkOrigin(origin)
 	if err != nil {
@@ -255,7 +269,7 @@ func getBroadcastToEmit() *Broadcast {
 	broadcastSlice := make([]*Broadcast, 0, 0)
 	broadcasts.Lock()
 	for _, b := range values {
-		if b.emitCounter <= broadcastRemoveValue {
+		if b._emitCounter <= broadcastRemoveValue {
 			logDebug("Removing", b.Label(), "from recently updated list")
 			delete(broadcasts.m, b.Label())
 		} else {
@@ -331,5 +345,7 @@ func (a byBroadcastEmitCounter) Swap(i, j int) {
 }
 
 func (a byBroadcastEmitCounter) Less(i, j int) bool {
-	return a[i].emitCounter > a[j].emitCounter
+	broadcasts.RLock()
+	defer broadcasts.RUnlock()
+	return a[i]._emitCounter > a[j]._emitCounter
 }

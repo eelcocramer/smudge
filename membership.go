@@ -663,7 +663,7 @@ func transmitVerbGenericUDP(node *Node, forwardTo *Node, verb messageVerb, code 
 			return err
 		}
 
-		n.emitCounter--
+		n.DecEmitCounter()
 	}
 
 	// Emit counters for broadcasts can be less than 0. We transmit positive
@@ -671,11 +671,11 @@ func transmitVerbGenericUDP(node *Node, forwardTo *Node, verb messageVerb, code 
 	// is removed from the map all together.
 	broadcast := getBroadcastToEmit()
 	if broadcast != nil {
-		if broadcast.emitCounter > 0 {
+		if broadcast.emitCounter() > 0 {
 			msg.addBroadcast(broadcast)
 		}
 
-		broadcast.emitCounter--
+		broadcast.decEmitCounter()
 	}
 
 	_, err = c.Write(msg.encode())
@@ -685,7 +685,7 @@ func transmitVerbGenericUDP(node *Node, forwardTo *Node, verb messageVerb, code 
 
 	// Decrement the update counters on those nodes
 	for _, m := range msg.members {
-		m.node.emitCounter--
+		m.node.DecEmitCounter()
 	}
 
 	logfTrace("Sent %v to %v", verb, node.Address())

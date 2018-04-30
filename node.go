@@ -19,6 +19,7 @@ package smudge
 import (
 	"fmt"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -34,6 +35,7 @@ const (
 
 // Node represents a single node in the cluster and its status
 type Node struct {
+	sync.RWMutex
 	ip           net.IP
 	port         uint16
 	timestamp    uint32
@@ -64,7 +66,23 @@ func (n *Node) Age() uint32 {
 // EmitCounter returns the number of times remaining that current status
 // will be emitted by this node to other nodes.
 func (n *Node) EmitCounter() int8 {
+	n.RLock()
+	defer n.RUnlock()
 	return n.emitCounter
+}
+
+// DecEmitCounter decreases the emitCounter by one.
+func (n *Node) DecEmitCounter() {
+	n.Lock()
+	defer n.Unlock()
+	n.emitCounter--
+}
+
+// IncEmitCounter increases the emitCounter by one.
+func (n *Node) IncEmitCounter() {
+	n.Lock()
+	defer n.Unlock()
+	n.emitCounter++
 }
 
 // IP returns the IP associated with this node.

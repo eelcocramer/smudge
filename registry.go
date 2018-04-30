@@ -196,7 +196,7 @@ func getRandomUpdatedNodes(size int, exclude ...*Node) []*Node {
 	// Prune nodes with emit counters of 0 (or less) from the map. Any
 	// others we copy into a secondary nodemap.
 	for _, n := range updatedNodes.values() {
-		if n.emitCounter <= 0 {
+		if n.EmitCounter() <= 0 {
 			logDebug("Removing", n.Address(), "from recently updated list")
 			updatedNodes.delete(n)
 		} else {
@@ -281,6 +281,7 @@ func parseNodeAddress(hostAndMaybePort string) (net.IP, uint16, error) {
 // node will be moved from the live nodes list to the dead nodes list.
 func updateNodeStatus(node *Node, status NodeStatus, heartbeat uint32, statusSource *Node) {
 	if node.status != status {
+		node.Lock()
 		if heartbeat < node.heartbeat {
 			logfWarn("Decreasing known node heartbeat value from %d to %d",
 				node.heartbeat,
@@ -292,6 +293,7 @@ func updateNodeStatus(node *Node, status NodeStatus, heartbeat uint32, statusSou
 		node.statusSource = statusSource
 		node.emitCounter = int8(emitCount())
 		node.heartbeat = heartbeat
+		node.Unlock()
 
 		// If this isn't in the recently updated list, add it.
 		if !updatedNodes.contains(node) {
@@ -333,5 +335,5 @@ func (a byNodeEmitCounter) Swap(i, j int) {
 }
 
 func (a byNodeEmitCounter) Less(i, j int) bool {
-	return a[i].emitCounter > a[j].emitCounter
+	return a[i].EmitCounter() > a[j].EmitCounter()
 }
