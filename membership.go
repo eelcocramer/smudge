@@ -36,7 +36,10 @@ const defaultIPv4MulticastAddress = "224.0.0.0"
 
 const defaultIPv6MulticastAddress = "[ff02::1]"
 
-var currentHeartbeat uint32
+var _currentHeartbeat = struct {
+	sync.RWMutex
+	value uint32
+}{}
 
 var pendingAcks = struct {
 	sync.RWMutex
@@ -148,10 +151,10 @@ func Begin() {
 				}
 			}
 
-			currentHeartbeat++
+			incCurrentHeartbeat()
 
 			logfTrace("%d - hosts=%d (announce=%d forward=%d)",
-				currentHeartbeat,
+				currentHeartbeat(),
 				len(randomAllNodes),
 				emitCount(),
 				pingRequestCount())
@@ -177,7 +180,7 @@ func Begin() {
 // PingNode can be used to explicitly ping a node. Calls the low-level
 // doPingNode(), and outputs a message (and returns an error) if it fails.
 func PingNode(node *Node) error {
-	err := transmitVerbPingUDP(node, currentHeartbeat)
+	err := transmitVerbPingUDP(node, currentHeartbeat())
 	if err != nil {
 		logInfo("Failure to ping", node, "->", err)
 	}
@@ -188,6 +191,30 @@ func PingNode(node *Node) error {
 /******************************************************************************
  * Private functions (for internal use only)
  *****************************************************************************/
+
+func currentHeartbeat() uint32 {
+	_currentHeartbeat.RLock()
+	defer _currentHeartbeat.RUnlock()
+	return _currentHeartbeat.value
+}
+
+func setCurrentHeartbeat(value uint32) {
+	_currentHeartbeat.Lock()
+	defer _currentHeartbeat.Unlock()
+	_currentHeartbeat.value = value
+}
+
+func decCurrentHeartbeat() {
+	_currentHeartbeat.Lock()
+	defer _currentHeartbeat.Unlock()
+	_currentHeartbeat.value--
+}
+
+func incCurrentHeartbeat() {
+	_currentHeartbeat.Lock()
+	defer _currentHeartbeat.Unlock()
+	_currentHeartbeat.value++
+}
 
 // Multicast announcements are constructed as:
 // Byte  0      - 1 byte character byte length N
@@ -213,7 +240,7 @@ func doForwardOnTimeout(pack *pendingAck) {
 	if len(filteredNodes) == 0 {
 		logDebug(thisHost.Address(), "Cannot forward ping request: no more nodes")
 
-		updateNodeStatus(pack.node, StatusDead, currentHeartbeat, thisHost)
+		updateNodeStatus(pack.node, StatusDead, currentHeartbeat(), thisHost)
 	} else {
 		for i, n := range filteredNodes {
 			logfDebug("(%d/%d) Requesting indirect ping of %s via %s",
@@ -222,7 +249,7 @@ func doForwardOnTimeout(pack *pendingAck) {
 				pack.node.Address(),
 				n.Address())
 
-			transmitVerbForwardUDP(n, pack.node, currentHeartbeat)
+			transmitVerbForwardUDP(n, pack.node, currentHeartbeat())
 		}
 	}
 }
@@ -250,7 +277,7 @@ func encodeMulticastAnnounceBytes() []byte {
 			" bytes (max 254)")
 	}
 
-	msg := newMessage(verbPing, thisHost, currentHeartbeat)
+	msg := newMessage(verbPing, thisHost, currentHeartbeat())
 	msgBytes := msg.encode()
 	msgBytesLen := len(msgBytes)
 
@@ -449,12 +476,12 @@ func receiveMessageUDP(addr *net.UDPAddr, msgBytes []byte) error {
 		msg.senderHeartbeat)
 
 	// Synchronize heartbeats
-	if msg.senderHeartbeat > 0 && msg.senderHeartbeat-1 > currentHeartbeat {
+	if msg.senderHeartbeat > 0 && msg.senderHeartbeat-1 > currentHeartbeat() {
 		logfTrace("Heartbeat advanced from %d to %d",
-			currentHeartbeat,
+			currentHeartbeat(),
 			msg.senderHeartbeat-1)
 
-		currentHeartbeat = msg.senderHeartbeat - 1
+		setCurrentHeartbeat(msg.senderHeartbeat - 1)
 	}
 
 	// Update statuses of the sender and any members the message includes.
@@ -600,10 +627,10 @@ func startTimeoutCheckLoop() {
 						case StatusDead:
 							break
 						case StatusSuspected:
-							updateNodeStatus(pack.callback, StatusDead, currentHeartbeat, thisHost)
+							updateNodeStatus(pack.callback, StatusDead, currentHeartbeat(), thisHost)
 							pack.callback.pingMillis = PingTimedOut
 						default:
-							updateNodeStatus(pack.callback, StatusSuspected, currentHeartbeat, thisHost)
+							updateNodeStatus(pack.callback, StatusSuspected, currentHeartbeat(), thisHost)
 							pack.callback.pingMillis = PingTimedOut
 						}
 					}
@@ -615,10 +642,10 @@ func startTimeoutCheckLoop() {
 						case StatusDead:
 							break
 						case StatusSuspected:
-							updateNodeStatus(pack.node, StatusDead, currentHeartbeat, thisHost)
+							updateNodeStatus(pack.node, StatusDead, currentHeartbeat(), thisHost)
 							pack.callback.pingMillis = PingTimedOut
 						default:
-							updateNodeStatus(pack.node, StatusSuspected, currentHeartbeat, thisHost)
+							updateNodeStatus(pack.node, StatusSuspected, currentHeartbeat(), thisHost)
 							pack.callback.pingMillis = PingTimedOut
 						}
 					}
