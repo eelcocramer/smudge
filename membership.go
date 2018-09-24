@@ -270,18 +270,21 @@ func encodeMulticastAnnounceBytes() []byte {
 	return bytes
 }
 
-func guessMulticastAddress() string {
+func guessMulticastAddress() (addr string, err error) {
+	err = nil
+	addr = multicastAddress
+
 	if multicastAddress == "" {
 		if ipLen == net.IPv6len {
-			multicastAddress = defaultIPv6MulticastAddress
+			addr = defaultIPv6MulticastAddress
 		} else if ipLen == net.IPv4len {
-			multicastAddress = defaultIPv4MulticastAddress
+			addr = defaultIPv4MulticastAddress
 		} else {
-			logFatal("Failed to determine IPv4/IPv6")
+			err = errors.New("Failed to determine IPv4/IPv6")
 		}
 	}
 
-	return multicastAddress
+	return
 }
 
 // Returns a random slice of valid ping/forward request targets; i.e., not
@@ -335,9 +338,13 @@ func listenUDP(port int) error {
 }
 
 func listenUDPMulticast(port int) error {
+	var err error
 	addr := GetMulticastAddress()
 	if addr == "" {
-		addr = guessMulticastAddress()
+		addr, err = guessMulticastAddress()
+		if err != nil {
+			return err
+		}
 	}
 
 	listenAddress, err := net.ResolveUDPAddr("udp", addr+":"+strconv.FormatInt(int64(port), 10))
@@ -389,8 +396,14 @@ func listenUDPMulticast(port int) error {
 // to broadcast its presence every multicastAnnounceIntervalSeconds in case
 // this value is larger than zero.
 func multicastAnnounce(addr string) error {
+	var err error
+
 	if addr == "" {
-		addr = guessMulticastAddress()
+		addr, err = guessMulticastAddress()
+		if err != nil {
+			logError(err)
+			return err
+		}
 	}
 
 	fullAddr := addr + ":" + strconv.FormatInt(int64(GetMulticastPort()), 10)
